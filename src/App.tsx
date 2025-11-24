@@ -4,122 +4,26 @@ import React, {
   useMemo,
   useLayoutEffect,
   useEffect,
+  useCallback,
 } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { OrbitControls, useGLTF } from "@react-three/drei";
-import ReactFlow, { Controls, Background } from "reactflow";
-import TuringMachine from "./logic/tm";
-import { makeDFADiagram } from "./logic/DFAhelper";
 import "reactflow/dist/style.css";
 import TuringMachineDFA from "./CU";
-
-function ControlUnitDiagram() {
-  const gamma = ["0", "1", "□"];
-  const alphabet = ["0", "1"];
-  const transitions = new Map<
-    string,
-    Map<string, [string, string, "R" | "L"]>
-  >();
-  const q0 = "q0";
-  const qAccept = "qa";
-  const qReject = "qr";
-
-  transitions.set(
-    "q0",
-    new Map([
-      ["0", ["q0", "1", "R"]],
-      ["1", ["q0", "0", "R"]],
-      ["□", ["qa", "□", "R"]],
-    ])
-  );
-
-  const tm = new TuringMachine(
-    gamma,
-    alphabet,
-    transitions,
-    q0,
-    qAccept,
-    qReject
-  );
-
-  const { nodes, edges } = makeDFADiagram(tm);
-  console.log({ nodes, edges });
-
-  const [activeState, setActiveState] = useState("q0");
-
-  const highlightedNodes = nodes.map((n) => ({
-    ...n,
-    style: {
-      ...n.style,
-      border:
-        n.id === activeState
-          ? "3px solid #ffff00"
-          : `2px solid ${n.style?.border || "#888"}`,
-      boxShadow: n.id === activeState ? "0 0 30px #ffff00" : n.style?.boxShadow,
-      width: 70,
-      height: 70,
-      borderRadius: "50%",
-      padding: 0,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      fontSize: "12px",
-      fontWeight: "bold",
-    },
-  }));
-
-  return (
-    <div style={{ width: "100%", height: "600px", background: "#1a1a1a" }}>
-      <ReactFlow
-        nodes={highlightedNodes}
-        edges={edges}
-        fitView
-        nodesDraggable={true}
-      >
-        <Controls />
-        <Background gap={20} color="#333" />
-      </ReactFlow>
-    </div>
-  );
-}
+import { useTMStore } from "./storage";
+import { Bot } from "lucide-react";
 
 type TuringMachineProps = {
   controlsRef: React.RefObject<any>;
+  devMode: boolean;
 };
 
-const TuringMachineUI: React.FC<TuringMachineProps> = ({ controlsRef }) => {
-  let [tapeArray, setTapeArray] = useState<string[]>([
-    "0",
-    "1",
-    "0",
-    "1",
-    "0",
-    "0",
-    "1",
-    "0",
-    "1",
-    "0",
-    "1",
-    "0",
-    "0",
-    "1",
-    "0",
-    "1",
-    "0",
-    "1",
-    "0",
-    "0",
-    "1",
-    "0",
-    "1",
-    "0",
-    "1",
-    "0",
-    "0",
-    "1",
-  ]);
-  const [headPosition, setHeadPosition] = useState<number>(0);
+const TuringMachineUI: React.FC<TuringMachineProps> = ({
+  controlsRef,
+  devMode,
+}) => {
+  const { tapeArray, headPosition, setHeadPosition } = useTMStore();
   const headRef = useRef<THREE.Mesh>(null!);
   const headLightRef = useRef<THREE.SpotLight>(null!);
   const tapeHead = useGLTF("/newtape.glb");
@@ -131,6 +35,7 @@ const TuringMachineUI: React.FC<TuringMachineProps> = ({ controlsRef }) => {
   const tapeTextures = useMemo(
     () =>
       tapeArray.map((symbol) => {
+        if (symbol === "_") symbol = "□"; // blank symbol
         const size = 1024;
         const canvas = document.createElement("canvas");
         canvas.width = size;
@@ -187,31 +92,41 @@ const TuringMachineUI: React.FC<TuringMachineProps> = ({ controlsRef }) => {
     }
   });
 
-  const moveHeadRight = () => {
-    setHeadPosition((prev) => (prev + 1) % tapeArray.length);
-  };
-
-  const moveHeadLeft = () => {
-    setHeadPosition((prev) => (prev === 0 ? tapeArray.length - 1 : prev - 1));
-  };
-
   const headPositionRef = useRef<number>(headPosition);
   useEffect(() => {
     headPositionRef.current = headPosition;
   }, [headPosition]);
 
-  const writeMode = (symbol: string) => {
-    setTapeHeadMode("writing");
+  const moveHeadRight = useCallback(() => {
+    if (!devMode) return;
+    const currentTape = useTMStore.getState().tapeArray;
+    const headPosition = useTMStore.getState().headPosition;
+    const newVal = (headPosition + 1) % currentTape.length;
+    setHeadPosition(newVal);
+  }, [devMode]);
 
-    setTapeArray((prev) => {
-      const newArray = [...prev];
-      const idx = headPositionRef.current; // always up-to-date
-      newArray[idx] = symbol;
-      return newArray;
-    });
+  const moveHeadLeft = useCallback(() => {
+    if (!devMode) return;
+    const currentTape = useTMStore.getState().tapeArray;
+    const headPosition = useTMStore.getState().headPosition;
+    const newVal =
+      headPosition === 0 ? currentTape.length - 1 : headPosition - 1;
+    setHeadPosition(newVal);
+  }, [devMode]);
 
-    setTimeout(() => setTapeHeadMode("reading"), 150);
-  };
+  const writeMode = useCallback(
+    (symbol: string) => {
+      if (!devMode) return;
+      setTapeHeadMode("writing");
+      const currentTape = useTMStore.getState().tapeArray;
+      const idx = headPositionRef.current;
+      const newInput = [...currentTape];
+      newInput[idx] = symbol;
+      useTMStore.getState().setTapeArray(newInput);
+      setTimeout(() => setTapeHeadMode("reading"), 150);
+    },
+    [devMode]
+  );
 
   useEffect(() => {
     function handleKey(e: any) {
@@ -222,11 +137,15 @@ const TuringMachineUI: React.FC<TuringMachineProps> = ({ controlsRef }) => {
     }
 
     window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [moveHeadRight, moveHeadLeft, writeMode]);
 
-    return () => {
-      window.removeEventListener("keydown", handleKey);
-    };
-  }, []);
+  useEffect(() => {
+    console.log("hellooooo");
+    setTapeHeadMode("writing");
+    const timeout = setTimeout(() => setTapeHeadMode("reading"), 150);
+    return () => clearTimeout(timeout);
+  }, [tapeArray]);
 
   return (
     <>
@@ -297,15 +216,24 @@ const TuringMachineUI: React.FC<TuringMachineProps> = ({ controlsRef }) => {
 };
 
 export default function App() {
+  const [developmentMode, setDevelopmentMode] = useState<boolean>(false);
   const controlsRef = useRef<any>(null);
   return (
     <div className="font-[Roboto_Mono] flex h-screen bg-slate-200">
       <div className="h-full flex-1 ml-3 flex flex-col gap-3 py-4">
         <div className="h-full border border-slate-400 rounded-lg overflow-hidden">
-          <div className="p-3 border-b border-slate-500 bg-slate-400/20">
+          <div className="p-3 border-b border-slate-500 bg-slate-400/20 flex items-center justify-between">
             <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
               3D Model Turing Machine
             </h3>
+            <h1
+              className={` cursor-pointer ${
+                developmentMode ? "text-blue-600" : "text-slate-900"
+              }`}
+              onClick={() => setDevelopmentMode(!developmentMode)}
+            >
+              <Bot />
+            </h1>
           </div>
           <Canvas
             dpr={[2, 3]}
@@ -315,7 +243,10 @@ export default function App() {
           >
             <ambientLight intensity={0.2} />
             <directionalLight position={[5, 5, 5]} />
-            <TuringMachineUI controlsRef={controlsRef} />
+            <TuringMachineUI
+              controlsRef={controlsRef}
+              devMode={developmentMode}
+            />
             <OrbitControls ref={controlsRef} enablePan enableRotate />
           </Canvas>
         </div>

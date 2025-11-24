@@ -1,5 +1,14 @@
-import React, { useState, useMemo, useId } from "react";
-import { ChevronRight, Info, Send, SendIcon } from "lucide-react";
+import React, { useState, useMemo, useId, useRef, use } from "react";
+import {
+  ChevronRight,
+  Info,
+  Rotate3D,
+  RotateCcw,
+  Send,
+  SendIcon,
+} from "lucide-react";
+import { useTMStore, useUIStore } from "./storage";
+import TuringMachine from "./logic/tm";
 
 // TYPES
 type Direction = "R" | "L";
@@ -58,43 +67,91 @@ export default function TuringMachineDFA() {
     null
   );
 
+  const [transition, setTransition] = useState<string>("Unary Incrementer");
+  const transitionRef = useRef<HTMLSelectElement>(null);
+  const setTuringMachine = useUIStore((state) => state.setTuringObject);
+  const turing_object = useUIStore((state) => state.turing_object);
+  const textRef = useRef<HTMLInputElement>(null);
+  const {
+    tapeArray,
+    headPosition,
+    currentState,
+    setTapeArray,
+    setHeadPosition,
+    setState,
+  } = useTMStore();
+
   // Generate a unique prefix for SVG IDs to prevent conflicts if multiple components exist
   const idPrefix = useId().replace(/:/g, "");
 
-  // DATA: Example Turing Machine
-  const transitions: TransitionMap = useMemo(() => {
+  const transitions = useMemo(() => {
     const t = new Map<string, Map<string, Transition>>();
-    // q0: Start
-    t.set(
-      "q0",
-      new Map([
-        ["0", ["q1", "X", "R"]],
-        ["1", ["q_accept", "Y", "R"]],
-        ["_", ["q_accept", "_", "L"]],
-      ])
-    );
-    // q1: Loop (Two self-loops here for testing overlap fix)
-    t.set(
-      "q1",
-      new Map([
-        ["0", ["q1", "0", "R"]],
-        ["1", ["q1", "1", "R"]],
-        ["_", ["q_accept", "_", "L"]],
-      ])
-    );
-    t.set(
-      "q2",
-      new Map([
-        ["0", ["q1", "0", "R"]],
-        ["1", ["q_accept", "1", "R"]],
-        ["_", ["q_accept", "_", "L"]],
-      ])
-    );
-    // q_accept
-    t.set("q_accept", new Map());
-    return t;
-  }, []);
 
+    let accept_state = "q_accept";
+
+    if (transition === "Unary Incrementer") {
+      t.set(
+        "q0",
+        new Map([
+          ["1", ["q0", "□", "R"]],
+          ["0", ["q0", "□", "R"]],
+          ["_", ["q1", "1", "L"]],
+        ])
+      );
+      t.set("q1", new Map([["1", ["q_accept", "1", "R"]]]));
+      t.set("q_accept", new Map());
+
+      accept_state = "q_accept";
+    } else if (transition === "Binary Complement") {
+      t.set(
+        "q0",
+        new Map([
+          ["0", ["q0", "1", "R"]],
+          ["1", ["q0", "0", "R"]],
+          ["_", ["q_accept", "_", "L"]],
+        ])
+      );
+      t.set("q_accept", new Map());
+
+      accept_state = "q_accept";
+    } else if (transition === "Binary left-shift") {
+      t.set(
+        "q0",
+        new Map([
+          ["0", ["q1", "_", "R"]],
+          ["1", ["q1", "_", "R"]],
+          ["_", ["q_accept", "_", "R"]],
+        ])
+      );
+
+      t.set(
+        "q1",
+        new Map([
+          ["0", ["q1", "0", "L"]],
+          ["1", ["q1", "1", "L"]],
+          ["_", ["q2", "_", "R"]],
+        ])
+      );
+
+      t.set(
+        "q2",
+        new Map([
+          ["0", ["q2", "0", "R"]],
+          ["1", ["q2", "1", "R"]],
+          ["_", ["q_accept", "_", "L"]],
+        ])
+      );
+      t.set("q_accept", new Map());
+
+      accept_state = "q_accept";
+    }
+
+    setTuringMachine(
+      new TuringMachine(["1", "0", "_"], t, "q0", accept_state, "q_reject")
+    );
+
+    return t;
+  }, [transition]);
   const states = Array.from(transitions.keys());
   const acceptStates = new Set(["q_accept"]);
   const NODE_RADIUS = 30;
@@ -169,13 +226,13 @@ export default function TuringMachineDFA() {
     if (isSelfLoop) {
       // --- SELF LOOP GEOMETRY ---
       const baseAngle = fromPos.angle;
-      const loopSpread = 0.5;
+      const loopSpread = 0.7;
       const angleOffset = (index - 0.5) * loopSpread;
 
       const adjustedAngle = baseAngle + angleOffset;
 
       const nodeR = NODE_RADIUS;
-      const ctrlDist = 60 + index * 20;
+      const ctrlDist = 50 + index * 30;
 
       const startAngle = adjustedAngle - 0.5;
       const endAngle = adjustedAngle + 0.5;
@@ -191,7 +248,7 @@ export default function TuringMachineDFA() {
       const cp2x = fromPos.x + ctrlDist * Math.cos(endAngle);
       const cp2y = fromPos.y + ctrlDist * Math.sin(endAngle);
 
-      const labelDist = ctrlDist + 20 + index * 10;
+      const labelDist = ctrlDist + 10 + index * 10;
       const labelX = fromPos.x + labelDist * Math.cos(adjustedAngle);
       const labelY = fromPos.y + labelDist * Math.sin(adjustedAngle);
 
@@ -206,7 +263,7 @@ export default function TuringMachineDFA() {
       const dist = Math.sqrt(dx * dx + dy * dy);
 
       // Curve amount (indexed by transition pair)
-      const curveOffset = 10 + index * 50;
+      const curveOffset = -40 + index * 40;
 
       // Perpendicular vector for curve
       const perpX = -dy / dist;
@@ -384,11 +441,37 @@ export default function TuringMachineDFA() {
           </div>
 
           {/* input */}
-          <div className="border border-slate-400 rounded-lg p-4">
-            Different Delta Functions
+          <div className="border border-slate-400 rounded-lg p-3 flex items-center justify-between">
+            <div>
+              <label htmlFor="ads" className="mr-1 font-bold text-sm">
+                Choose Delta Function:
+              </label>
+              <select
+                name="delta"
+                id="ads"
+                className=" text-blue-900/80"
+                ref={transitionRef}
+                onChange={(e) => setTransition(e.target.value)}
+              >
+                <option value="Unary Incrementer">Unary Incrementer</option>
+                <option value="Binary Complement">Binary Complement</option>
+                <option value="Binary left-shift">Binary left-shift</option>
+              </select>
+            </div>
+
+            <button
+              className="flex items-center gap-2 rounded-lg hover:text-slate-800 transition py-1 px-2 text-sm font-semibold cursor-pointer"
+              onClick={() => {
+                setHeadPosition(0);
+                setTapeArray(["_", "_", "_", "_", "_"]);
+                setState("q0");
+              }}
+            >
+              <h2>RESET</h2> <RotateCcw size={16} />
+            </button>
           </div>
-          <div className="border border-slate-400 rounded-lg p-2 px-4 flex justify-between">
-            <label htmlFor="ddd" className="mr-1">
+          <div className="border  border-slate-400 rounded-lg p-2 px-4 flex justify-between items-center">
+            <label htmlFor="ddd" className="mr-1 font-bold text-sm">
               Input:
             </label>
             <input
@@ -397,9 +480,89 @@ export default function TuringMachineDFA() {
               id="ddd"
               placeholder="Enter Your String"
               className="border-none outline-none bg-slate-200 flex-1 text-blue-900/80"
+              ref={textRef}
+              onChange={() => {
+                if (
+                  ["1", "0", "_"].some(
+                    (char) =>
+                      !textRef.current!.value.split("").every((c) => c === char)
+                  )
+                ) {
+                  textRef.current!.value = textRef
+                    .current!.value.split("")
+                    .filter((c) => c === "1" || c === "0" || c === "_")
+                    .join("");
+                }
+              }}
             />
-            <button className="bg-slate-900 text-white rounded-lg ml-4 hover:bg-slate-800 transition py-1 px-2 text-sm font-semibold cursor-pointer">
+            <button
+              className="bg-slate-900 text-white rounded-lg ml-4 hover:bg-slate-800 transition py-1 px-2 text-sm font-semibold cursor-pointer"
+              onClick={() => {
+                if (textRef.current) {
+                  if (textRef.current.value === "") {
+                    alert("Input cannot be empty");
+                    return;
+                  }
+                  if (
+                    textRef.current.value
+                      .split("")
+                      .some((c) => ["1", "0"].includes(c) === false)
+                  ) {
+                    alert(
+                      "Input contains invalid characters for the selected transition function."
+                    );
+                    return;
+                  }
+                  setTapeArray(
+                    [
+                      ...textRef.current.value.split(""),
+                      Array(10).fill("_"),
+                    ].flat()
+                  );
+                }
+              }}
+            >
               SUBMIT
+            </button>
+            <button
+              className="bg-slate-900 text-white rounded-lg ml-1 hover:bg-slate-800 transition py-1 px-2 text-sm font-semibold cursor-pointer"
+              onClick={() => {
+                console.log("Implement RUN logic here");
+                if (turing_object) {
+                  console.log({ turing_object });
+                  let obj = turing_object.step(
+                    tapeArray,
+                    headPosition,
+                    currentState
+                  );
+                  console.log({ obj });
+                  if (obj!.newTape != null) setTapeArray(obj!.newTape);
+                  setHeadPosition(obj!.newHead);
+                  setState(obj!.newState);
+                }
+              }}
+            >
+              STEP
+            </button>
+            <button
+              className="bg-indigo-800/80 text-white rounded-lg ml-1 hover:bg-slate-800 transition py-1 px-2 text-sm font-semibold cursor-pointer"
+              onClick={() => {
+                console.log("Implement RUN logic here");
+                if (turing_object) {
+                  console.log({ turing_object });
+                  let obj = turing_object.step(
+                    tapeArray,
+                    headPosition,
+                    currentState
+                  );
+                  console.log({ obj });
+                  if (obj!.newTape != null) setTapeArray(obj!.newTape);
+                  setHeadPosition(obj!.newHead);
+                  setState(obj!.newState);
+                }
+              }}
+            >
+              RUN
             </button>
           </div>
         </div>
