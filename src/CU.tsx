@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useId, useRef, use } from "react";
+import React, { useState, useMemo, useId, useRef, use, useEffect } from "react";
 import {
   ChevronRight,
   Info,
@@ -71,6 +71,7 @@ export default function TuringMachineDFA() {
   const transitionRef = useRef<HTMLSelectElement>(null);
   const setTuringMachine = useUIStore((state) => state.setTuringObject);
   const turing_object = useUIStore((state) => state.turing_object);
+  const [start, setStart] = useState(false);
   const textRef = useRef<HTMLInputElement>(null);
   const {
     tapeArray,
@@ -79,7 +80,24 @@ export default function TuringMachineDFA() {
     setTapeArray,
     setHeadPosition,
     setState,
+    currentSymbol,
+    setCurrentSymbol,
   } = useTMStore();
+  const tmRef = useRef({
+    tape: tapeArray,
+    head: headPosition,
+    state: currentState,
+  });
+
+  useEffect(() => {
+    tmRef.current.tape = tapeArray;
+  }, [tapeArray]);
+  useEffect(() => {
+    tmRef.current.head = headPosition;
+  }, [headPosition]);
+  useEffect(() => {
+    tmRef.current.state = currentState;
+  }, [currentState]);
 
   // Generate a unique prefix for SVG IDs to prevent conflicts if multiple components exist
   const idPrefix = useId().replace(/:/g, "");
@@ -93,12 +111,18 @@ export default function TuringMachineDFA() {
       t.set(
         "q0",
         new Map([
-          ["1", ["q0", "□", "R"]],
-          ["0", ["q0", "□", "R"]],
-          ["_", ["q1", "1", "L"]],
+          ["1", ["q0", "-", "R"]],
+          ["0", ["q0", "-", "R"]],
+          ["□", ["q1", "1", "L"]],
         ])
       );
-      t.set("q1", new Map([["1", ["q_accept", "1", "R"]]]));
+      t.set(
+        "q1",
+        new Map([
+          ["1", ["q_accept", "-", "R"]],
+          ["0", ["q_accept", "-", "R"]],
+        ])
+      );
       t.set("q_accept", new Map());
 
       accept_state = "q_accept";
@@ -108,41 +132,33 @@ export default function TuringMachineDFA() {
         new Map([
           ["0", ["q0", "1", "R"]],
           ["1", ["q0", "0", "R"]],
-          ["_", ["q_accept", "_", "L"]],
+          ["□", ["q_accept", "-", "L"]],
         ])
       );
       t.set("q_accept", new Map());
 
       accept_state = "q_accept";
-    } else if (transition === "Binary left-shift") {
+    } else if (transition === "Even Length Checker") {
+      // Accepts if string has even length
       t.set(
         "q0",
         new Map([
-          ["0", ["q1", "_", "R"]],
-          ["1", ["q1", "_", "R"]],
-          ["_", ["q_accept", "_", "R"]],
+          ["0", ["q1", "X", "R"]],
+          ["1", ["q1", "X", "R"]],
+          ["□", ["q_accept", "□", "L"]],
         ])
       );
-
       t.set(
         "q1",
         new Map([
-          ["0", ["q1", "0", "L"]],
-          ["1", ["q1", "1", "L"]],
-          ["_", ["q2", "_", "R"]],
-        ])
-      );
-
-      t.set(
-        "q2",
-        new Map([
-          ["0", ["q2", "0", "R"]],
-          ["1", ["q2", "1", "R"]],
-          ["_", ["q_accept", "_", "L"]],
+          ["0", ["q0", "X", "R"]],
+          ["1", ["q0", "X", "R"]],
+          ["X", ["q1", "X", "R"]],
+          ["□", ["q_reject", "□", "L"]],
         ])
       );
       t.set("q_accept", new Map());
-
+      t.set("q_reject", new Map());
       accept_state = "q_accept";
     }
 
@@ -177,8 +193,13 @@ export default function TuringMachineDFA() {
     return { positions: pos, center: { x: centerX, y: centerY } };
   }, [states]);
 
-  const getTransitionKey = (from: string, to: string, input: string) =>
-    `${from}-${input}-${to}`;
+  const getTransitionKey = (from: string, input: string) => `${from}-${input}`;
+
+  useEffect(() => {
+    let key = getTransitionKey(currentState, currentSymbol);
+    console.log({ currentState, currentSymbol });
+    setSelectedTransition(key);
+  }, [tapeArray, headPosition, currentState]);
 
   // Pre-process transitions to group self-loops and inter-node for indexed calculations
   const transitionsData: TransitionDetail[] = useMemo(() => {
@@ -219,7 +240,7 @@ export default function TuringMachineDFA() {
     const { from, to, input, write, dir, index, isSelfLoop } = detail;
     const fromPos = positions[from];
     const toPos = positions[to];
-    const key = getTransitionKey(from, to, input);
+    const key = getTransitionKey(from, input);
 
     if (!fromPos || !toPos) return null;
 
@@ -310,6 +331,55 @@ export default function TuringMachineDFA() {
     >[];
   }, [transitionsData, positions]);
 
+  const onStepClick = () => {
+    if (!start) {
+      alert("You Haven't setup the tape");
+      return;
+    }
+    if (turing_object) {
+      console.log({ turing_object });
+      let obj = turing_object.step(tapeArray, headPosition, currentState);
+      if (!obj) return;
+      if (obj!.newTape != null) setTapeArray(obj.newTape);
+      setHeadPosition(obj.newHead);
+      setState(obj.newState);
+      // set current symbol
+      setCurrentSymbol(tapeArray[obj.newHead]);
+    }
+  };
+  const onRunClick = async () => {
+    if (!start) return;
+    if (!turing_object) return;
+
+    const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
+    while (
+      tmRef.current.state != "q_accept" &&
+      tmRef.current.state != "q_reject"
+    ) {
+      console.log({ tmRef });
+
+      const obj = turing_object.step(
+        tmRef.current.tape,
+        tmRef.current.head,
+        tmRef.current.state
+      );
+
+      if (!obj) return;
+      if (obj!.newTape != null) tmRef.current.tape = obj.newTape;
+      tmRef.current.head = obj.newHead;
+      tmRef.current.state = obj.newState;
+
+      console.log("new ref");
+      console.log({ tmRef });
+
+      if (obj!.newTape != null) setTapeArray(obj.newTape);
+      setHeadPosition(obj.newHead);
+      setState(obj.newState);
+
+      await sleep(300);
+    }
+  };
+
   return (
     <div className="min-w-fit max-w-6xl mx-auto p-4 h-full">
       <div className="flex flex-col lg:flex-row gap-3 h-full">
@@ -359,9 +429,9 @@ export default function TuringMachineDFA() {
                   return (
                     <path
                       key={g.key}
-                      onClick={() =>
-                        setSelectedTransition(isSelected ? null : g.key)
-                      }
+                      // onClick={() =>
+                      //   setSelectedTransition(isSelected ? null : g.key)
+                      // }
                       d={g.pathD}
                       stroke={isSelected ? "#2b7fff" : "#60a5fa"}
                       strokeWidth={isSelected ? 3 : 2}
@@ -403,14 +473,22 @@ export default function TuringMachineDFA() {
                     <circle
                       r={NODE_RADIUS}
                       className={`${
-                        isAccept ? "stroke-emerald-400" : "stroke-slate-400"
-                      } fill-slate-300`}
+                        currentState == state
+                          ? "stroke-blue-500 stroke-3"
+                          : isAccept
+                          ? "stroke-emerald-400"
+                          : "stroke-slate-400"
+                      }  ${
+                        currentState == state
+                          ? "fill-blue-300"
+                          : "fill-slate-300"
+                      } transition-colors duration-300`}
                       strokeWidth={isAccept ? 3 : 2}
                     />
                     {isAccept && (
                       <circle
                         r={NODE_RADIUS - 6}
-                        className="stroke-emerald-400 fill-none"
+                        className="stroke-emerald-400 fill-none stroke-2"
                         strokeWidth="1"
                       />
                     )}
@@ -455,7 +533,7 @@ export default function TuringMachineDFA() {
               >
                 <option value="Unary Incrementer">Unary Incrementer</option>
                 <option value="Binary Complement">Binary Complement</option>
-                <option value="Binary left-shift">Binary left-shift</option>
+                <option value="Even Length Checker">Even Length Checker</option>
               </select>
             </div>
 
@@ -463,8 +541,10 @@ export default function TuringMachineDFA() {
               className="flex items-center gap-2 rounded-lg hover:text-slate-800 transition py-1 px-2 text-sm font-semibold cursor-pointer"
               onClick={() => {
                 setHeadPosition(0);
-                setTapeArray(["_", "_", "_", "_", "_"]);
+                setTapeArray(["□", "□", "□", "□", "□"]);
                 setState("q0");
+                setCurrentSymbol("□");
+                setStart(false);
               }}
             >
               <h2>RESET</h2> <RotateCcw size={16} />
@@ -498,6 +578,7 @@ export default function TuringMachineDFA() {
             <button
               className="bg-slate-900 text-white rounded-lg ml-4 hover:bg-slate-800 transition py-1 px-2 text-sm font-semibold cursor-pointer"
               onClick={() => {
+                setStart(true);
                 if (textRef.current) {
                   if (textRef.current.value === "") {
                     alert("Input cannot be empty");
@@ -516,9 +597,10 @@ export default function TuringMachineDFA() {
                   setTapeArray(
                     [
                       ...textRef.current.value.split(""),
-                      Array(10).fill("_"),
+                      Array(10).fill("□"),
                     ].flat()
                   );
+                  setCurrentSymbol(textRef.current.value[0]);
                 }
               }}
             >
@@ -526,41 +608,13 @@ export default function TuringMachineDFA() {
             </button>
             <button
               className="bg-slate-900 text-white rounded-lg ml-1 hover:bg-slate-800 transition py-1 px-2 text-sm font-semibold cursor-pointer"
-              onClick={() => {
-                console.log("Implement RUN logic here");
-                if (turing_object) {
-                  console.log({ turing_object });
-                  let obj = turing_object.step(
-                    tapeArray,
-                    headPosition,
-                    currentState
-                  );
-                  console.log({ obj });
-                  if (obj!.newTape != null) setTapeArray(obj!.newTape);
-                  setHeadPosition(obj!.newHead);
-                  setState(obj!.newState);
-                }
-              }}
+              onClick={onStepClick}
             >
               STEP
             </button>
             <button
               className="bg-indigo-800/80 text-white rounded-lg ml-1 hover:bg-slate-800 transition py-1 px-2 text-sm font-semibold cursor-pointer"
-              onClick={() => {
-                console.log("Implement RUN logic here");
-                if (turing_object) {
-                  console.log({ turing_object });
-                  let obj = turing_object.step(
-                    tapeArray,
-                    headPosition,
-                    currentState
-                  );
-                  console.log({ obj });
-                  if (obj!.newTape != null) setTapeArray(obj!.newTape);
-                  setHeadPosition(obj!.newHead);
-                  setState(obj!.newState);
-                }
-              }}
+              onClick={onRunClick}
             >
               RUN
             </button>
@@ -591,15 +645,15 @@ export default function TuringMachineDFA() {
                     </div>
                     {Array.from(fromTrans.entries()).map(
                       ([input, [to, write, dir]]) => {
-                        const key = getTransitionKey(from, to, input);
+                        const key = getTransitionKey(from, input);
                         const isSelected = selectedTransition === key;
 
                         return (
                           <div
                             key={key}
-                            onClick={() =>
-                              setSelectedTransition(isSelected ? null : key)
-                            }
+                            // onClick={() =>
+                            //   setSelectedTransition(isSelected ? null : key)
+                            // }
                             className={`
                                     px-3 py-2 cursor-pointer flex items-center justify-between text-sm border-l-2 transition-colors
                                     ${

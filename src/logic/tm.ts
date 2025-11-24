@@ -33,11 +33,9 @@ export default class TuringMachine {
     console.log(
       newSymbol !== undefined || newSymbol !== null || newSymbol !== "□"
     );
-    if (newSymbol !== "□") {
+    if (newSymbol !== "-") {
       newTape[headPosition] = newSymbol;
-      console.log("Setting newTape to updated tape");
     } else {
-      console.log("Setting newTape to null");
       newTape = null;
     }
 

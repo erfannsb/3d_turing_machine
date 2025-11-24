@@ -142,6 +142,8 @@ const TuringMachineUI: React.FC<TuringMachineProps> = ({
 
   useEffect(() => {
     console.log("hellooooo");
+    console.log({ tapeArray });
+    console.log(tapeArray[headPosition]);
     setTapeHeadMode("writing");
     const timeout = setTimeout(() => setTapeHeadMode("reading"), 150);
     return () => clearTimeout(timeout);

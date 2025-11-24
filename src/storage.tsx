@@ -19,16 +19,20 @@ interface TMState {
   tapeArray: string[];
   headPosition: number;
   currentState: string;
+  currentSymbol: string;
+  setCurrentSymbol: (symbol: string) => void;
   setTapeArray: (tape: string[]) => void;
   setHeadPosition: (pos: number) => void;
   setState: (state: string) => void;
 }
 
 export const useTMStore = create<TMState>((set) => ({
-  tapeArray: ["_", "_", "_", "_", "_"], // initial blank tape
+  tapeArray: ["□", "□", "□", "□", "□"], // initial blank tape
   headPosition: 0,
   currentState: "q0",
   setTapeArray: (tape) => set({ tapeArray: tape }),
   setHeadPosition: (headPosition) => set({ headPosition }),
   setState: (state) => set({ currentState: state }),
+  currentSymbol: "_",
+  setCurrentSymbol: (symbol) => set({ currentSymbol: symbol }),
 }));
