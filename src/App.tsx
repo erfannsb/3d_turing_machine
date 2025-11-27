@@ -218,6 +218,7 @@ const TuringMachineUI: React.FC<TuringMachineProps> = ({
 };
 
 export default function App() {
+  const tapeArray = useTMStore((state) => state.tapeArray);
   const [developmentMode, setDevelopmentMode] = useState<boolean>(false);
   const controlsRef = useRef<any>(null);
   return (
@@ -251,6 +252,10 @@ export default function App() {
             />
             <OrbitControls ref={controlsRef} enablePan enableRotate />
           </Canvas>
+        </div>
+        <div className="flex items-center p-3 border-slate-400 rounded-lg border text-sm">
+          <h3 className="font-bold">Tape Output: </h3>
+          <h3 className="ml-2">{tapeArray.filter((v) => v != "□")}</h3>
         </div>
       </div>
       <TuringMachineDFA />

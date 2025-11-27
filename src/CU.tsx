@@ -1,19 +1,11 @@
-import React, { useState, useMemo, useId, useRef, use, useEffect } from "react";
-import {
-  ChevronRight,
-  Info,
-  Rotate3D,
-  RotateCcw,
-  Send,
-  SendIcon,
-} from "lucide-react";
+import { useState, useMemo, useId, useRef, useEffect } from "react";
+import { ChevronRight, Info, RotateCcw } from "lucide-react";
 import { useTMStore, useUIStore } from "./storage";
 import TuringMachine from "./logic/tm";
 
 // TYPES
 type Direction = "R" | "L";
 type Transition = [string, string, Direction]; // [TargetState, WriteChar, MoveDirection]
-type TransitionMap = Map<string, Map<string, Transition>>;
 type TransitionDetail = {
   from: string;
   to: string;
@@ -173,7 +165,7 @@ export default function TuringMachineDFA() {
   const NODE_RADIUS = 30;
 
   // LAYOUT CALCULATION
-  const { positions, center } = useMemo(() => {
+  const { positions } = useMemo(() => {
     const radius = 180;
     const centerX = 400;
     const centerY = 300;
@@ -380,6 +372,14 @@ export default function TuringMachineDFA() {
     }
   };
 
+  const onResetClick = () => {
+    setHeadPosition(0);
+    setTapeArray(["□", "□", "□", "□", "□"]);
+    setState("q0");
+    setCurrentSymbol("□");
+    setStart(false);
+  };
+
   return (
     <div className="min-w-fit max-w-6xl mx-auto p-4 h-full">
       <div className="flex flex-col lg:flex-row gap-3 h-full">
@@ -539,13 +539,7 @@ export default function TuringMachineDFA() {
 
             <button
               className="flex items-center gap-2 rounded-lg hover:text-slate-800 transition py-1 px-2 text-sm font-semibold cursor-pointer"
-              onClick={() => {
-                setHeadPosition(0);
-                setTapeArray(["□", "□", "□", "□", "□"]);
-                setState("q0");
-                setCurrentSymbol("□");
-                setStart(false);
-              }}
+              onClick={onResetClick}
             >
               <h2>RESET</h2> <RotateCcw size={16} />
             </button>
@@ -578,12 +572,14 @@ export default function TuringMachineDFA() {
             <button
               className="bg-slate-900 text-white rounded-lg ml-4 hover:bg-slate-800 transition py-1 px-2 text-sm font-semibold cursor-pointer"
               onClick={() => {
-                setStart(true);
                 if (textRef.current) {
                   if (textRef.current.value === "") {
                     alert("Input cannot be empty");
                     return;
                   }
+                  setStart(true);
+                  setHeadPosition(0);
+                  setState("q0");
                   if (
                     textRef.current.value
                       .split("")
