@@ -4,5 +4,6 @@ import tailwindcss from "@tailwindcss/vite";
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: "/3d_turing_machine/",
   plugins: [react(), tailwindcss()],
 });
