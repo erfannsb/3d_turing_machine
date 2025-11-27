@@ -26,7 +26,7 @@ const TuringMachineUI: React.FC<TuringMachineProps> = ({
   const { tapeArray, headPosition, setHeadPosition } = useTMStore();
   const headRef = useRef<THREE.Mesh>(null!);
   const headLightRef = useRef<THREE.SpotLight>(null!);
-  const tapeHead = useGLTF("/newtape.glb");
+  const tapeHead = useGLTF("/3d_turing_machine/newtape.glb");
   const [tapeHeadMode, setTapeHeadMode] = useState<"writing" | "reading">(
     "reading"
   );
