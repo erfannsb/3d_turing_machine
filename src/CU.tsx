@@ -154,9 +154,7 @@ export default function TuringMachineDFA() {
       accept_state = "q_accept";
     }
 
-    setTuringMachine(
-      new TuringMachine(["1", "0", "_"], t, "q0", accept_state, "q_reject")
-    );
+    setTuringMachine(new TuringMachine(t, accept_state, "q_reject"));
 
     return t;
   }, [transition]);

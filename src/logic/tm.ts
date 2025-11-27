@@ -1,17 +1,13 @@
 export default class TuringMachine {
   private transitions: Map<string, Map<string, [string, string, "R" | "L"]>>;
-  private alphabet: string[];
   private q_accept: string;
   private q_reject: string;
 
   constructor(
-    alphabet: string[],
     transitions: Map<string, Map<string, [string, string, "R" | "L"]>>,
-    q_start: string,
     q_accept: string,
     q_reject: string
   ) {
-    this.alphabet = alphabet;
     this.transitions = transitions;
     this.q_accept = q_accept;
     this.q_reject = q_reject;
